@@ -9,49 +9,80 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	validation "github.com/go-ozzo/ozzo-validation/v4"
 )
 
-// writing custom unmarshallers helps with a ) coverting to more appropriate types and b) validating the data.
-// I could have also used a receiptInput struct to unmarshall stuff and then validate it, but that leads to a almost the same amount of code.
-// and this feels cleaner.
-// I could have converted to string{interface} but with that i have to marshal the items field back to json before passing it off or have a single
-// maeshaller. this keeps both separate and does not require remarshalling.
+// DTOs are used to handle the raw JSON input, followed by validation and conversion to proper types
+// the validators help for debugging even if they are yet not sent to the user.
+type ItemDTO struct {
+	ShortDescription string `json:"shortDescription"`
+	Price            string `json:"price"`
+}
+
+func (r ItemDTO) Validate() error {
+	return validation.ValidateStruct(&r,
+		validation.Field(&r.ShortDescription,
+			validation.Required,
+			validation.Match(regexp.MustCompile(`^[\w\s\-&]+$`)).Error("want alphanumeric characters, spaces, hyphens, and ampersands")),
+		validation.Field(&r.Price,
+			validation.Required,
+			validation.Match(regexp.MustCompile(`^\d+\.\d{2}$`)).Error("want 0.00 format")),
+	)
+}
+
+func (r ItemDTO) ToItem() (Item, error) {
+	if err := r.Validate(); err != nil {
+		return Item{}, err
+	}
+
+	price, err := strconv.ParseFloat(r.Price, 64)
+	if err != nil {
+		return Item{}, fmt.Errorf("invalid price value: %s", r.Price)
+	}
+
+	// making an assumption here.
+	if price < 0 {
+		return Item{}, fmt.Errorf("price must be a positive number")
+	}
+
+	return Item{
+		ShortDescription: r.ShortDescription,
+		Price:            price,
+	}, nil
+}
+
+type ReceiptDTO struct {
+	Retailer     string    `json:"retailer"`
+	PurchaseDate string    `json:"purchaseDate"`
+	PurchaseTime string    `json:"purchaseTime"`
+	Items        []ItemDTO `json:"items"`
+	Total        string    `json:"total"`
+}
+
+func (r ReceiptDTO) Validate() error {
+	return validation.ValidateStruct(&r,
+		validation.Field(&r.Retailer,
+			validation.Required,
+			validation.Match(regexp.MustCompile(`^[\w\s\-&]+$`)).Error("only alphanumeric characters, spaces, hyphens, and ampersands are allowed")),
+		validation.Field(&r.PurchaseDate,
+			validation.Required,
+			validation.Date("2006-01-02").Error("want YYYY-MM-DD format")),
+		validation.Field(&r.PurchaseTime,
+			validation.Required,
+			validation.Date("15:04").Error("want HH:MM format")),
+		validation.Field(&r.Items,
+			validation.Required,
+			validation.Length(1, 0).Error("must contain at least one item")),
+		validation.Field(&r.Total,
+			validation.Required,
+			validation.Match(regexp.MustCompile(`^\d+\.\d{2}$`)).Error("want 0.00 format")),
+	)
+}
 
 type Item struct {
 	ShortDescription string  `json:"shortDescription"`
 	Price            float64 `json:"price"`
-}
-
-func (i *Item) UnmarshalJSON(b []byte) error {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(b, &raw); err != nil {
-		return err
-	}
-
-	var shortDescription string
-	if err := json.Unmarshal(raw["shortDescription"], &shortDescription); err != nil {
-		return fmt.Errorf("item short description is not valid json")
-	}
-	if matched, err := regexp.MatchString(`^[\w\s\-&]+$`, shortDescription); err != nil || !matched {
-		return fmt.Errorf("invalid short description format: %s. want alphanumeric characters, spaces, hyphens, and ampersands", shortDescription)
-	}
-
-	var priceStr string
-	if err := json.Unmarshal(raw["price"], &priceStr); err != nil {
-		return fmt.Errorf("item price is not valid json")
-	}
-	if matched, err := regexp.MatchString(`^\d+\.\d{2}$`, priceStr); err != nil || !matched {
-		return fmt.Errorf("invalid price format: %s. want 0.00 format", priceStr)
-	}
-	price, err := strconv.ParseFloat(priceStr, 64)
-	if err != nil {
-		return fmt.Errorf("invalid price value: %s", priceStr)
-	}
-
-	i.ShortDescription = shortDescription
-	i.Price = price
-
-	return nil
 }
 
 type Receipt struct {
@@ -62,65 +93,62 @@ type Receipt struct {
 	Total        float64   `json:"total"`
 }
 
+func (r ReceiptDTO) ToReceipt() (Receipt, error) {
+	// these errors are unlikely to happen - and should signify some internal server error.
+	purchaseDate, err := time.Parse("2006-01-02", r.PurchaseDate)
+	if err != nil {
+		return Receipt{}, validation.Errors{"purchaseDate": validation.NewError("purchaseDate", err.Error())}
+	}
+
+	purchaseTime, err := time.Parse("15:04", r.PurchaseTime)
+	if err != nil {
+		return Receipt{}, validation.Errors{"purchaseTime": validation.NewError("purchaseTime", err.Error())}
+	}
+
+	total, err := strconv.ParseFloat(r.Total, 64)
+	if err != nil {
+		return Receipt{}, validation.Errors{"total": validation.NewError("total", err.Error())}
+	}
+
+	// making an assumption here.
+	if total < 0 {
+		return Receipt{}, validation.Errors{"total": validation.NewError("total", "must be a positive number")}
+	}
+
+	items := make([]Item, len(r.Items))
+	for i, itemDTO := range r.Items {
+		item, err := itemDTO.ToItem()
+		if err != nil {
+			return Receipt{}, validation.Errors{fmt.Sprintf("items.%d", i): validation.NewError(fmt.Sprintf("items.%d", i), err.Error())}
+		}
+		items[i] = item
+	}
+
+	return Receipt{
+		Retailer:     r.Retailer,
+		PurchaseDate: purchaseDate,
+		PurchaseTime: purchaseTime,
+		Items:        items,
+		Total:        total,
+	}, nil
+}
+
 func (r *Receipt) UnmarshalJSON(b []byte) error {
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(b, &raw); err != nil {
+	var dto ReceiptDTO
+	if err := json.Unmarshal(b, &dto); err != nil {
 		return err
 	}
 
-	var retailer string
-	if err := json.Unmarshal(raw["retailer"], &retailer); err != nil {
-		return fmt.Errorf("retailer is not valid json")
-	}
-	if matched, err := regexp.MatchString(`^[\w\s\-&]+$`, retailer); err != nil || !matched {
-		return fmt.Errorf("invalid retailer format: %s. want alphanumeric characters, spaces, hyphens, and ampersands", retailer)
+	if err := dto.Validate(); err != nil {
+		return err
 	}
 
-	var dateStr string
-	if err := json.Unmarshal(raw["purchaseDate"], &dateStr); err != nil {
-		return fmt.Errorf("purchase date is not valid json")
-	}
-	purchaseDate, err := time.Parse("2006-01-02", dateStr)
+	receipt, err := dto.ToReceipt()
 	if err != nil {
-		return fmt.Errorf("invalid purchase date format: %s. want YYYY-MM-DD format", dateStr)
+		return err
 	}
 
-	var timeStr string
-	if err := json.Unmarshal(raw["purchaseTime"], &timeStr); err != nil {
-		return fmt.Errorf("purchase time is not valid json")
-	}
-	purchaseTime, err := time.Parse("15:04", timeStr)
-	if err != nil {
-		return fmt.Errorf("invalid purchase time format: %s. want HH:MM format", timeStr)
-	}
-
-	var totalStr string
-	if err := json.Unmarshal(raw["total"], &totalStr); err != nil {
-		return fmt.Errorf("total is not valid json")
-	}
-	if matched, err := regexp.MatchString(`^\d+\.\d{2}$`, totalStr); err != nil || !matched {
-		return fmt.Errorf("invalid total format: %s. want 0.00 format", totalStr)
-	}
-	total, err := strconv.ParseFloat(totalStr, 64)
-	if err != nil {
-		return fmt.Errorf("invalid total value: %s", totalStr)
-	}
-
-	var items []Item
-	if err := json.Unmarshal(raw["items"], &items); err != nil {
-		return fmt.Errorf("invalid items: %s", err)
-	}
-
-	if len(items) == 0 {
-		return fmt.Errorf("invalid items: must contain at least one item")
-	}
-
-	r.Retailer = retailer
-	r.PurchaseDate = purchaseDate
-	r.PurchaseTime = purchaseTime
-	r.Items = items
-	r.Total = total
-
+	*r = receipt
 	return nil
 }
 

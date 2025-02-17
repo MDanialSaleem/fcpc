@@ -78,11 +78,16 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"retailer": "Target!!!",
 				"purchaseDate": "2022-01-01",
 				"purchaseTime": "13:01",
-				"items": [],
+				"items": [
+					{
+					"shortDescription": "Mountain Dew 12PK",
+					"price": "6.49"
+					}
+				],
 				"total": "0.00"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "invalid retailer format: Target!!!. want alphanumeric characters, spaces, hyphens, and ampersands",
+			wantErrMsg: "retailer: only alphanumeric characters, spaces, hyphens, and ampersands are allowed.",
 		},
 		{
 			name: "invalid date format",
@@ -90,11 +95,16 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"retailer": "Target",
 				"purchaseDate": "01-01-2022",
 				"purchaseTime": "13:01",
-				"items": [],
+				"items": [
+					{
+					"shortDescription": "Mountain Dew 12PK",
+					"price": "6.49"
+					}
+				],
 				"total": "0.00"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "invalid purchase date format: 01-01-2022. want YYYY-MM-DD format",
+			wantErrMsg: "purchaseDate: want YYYY-MM-DD format.",
 		},
 		{
 			name: "invalid time format",
@@ -102,11 +112,16 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"retailer": "Target",
 				"purchaseDate": "2022-01-01",
 				"purchaseTime": "1:01 PM",
-				"items": [],
+				"items": [
+					{
+					"shortDescription": "Mountain Dew 12PK",
+					"price": "6.49"
+					}
+				],
 				"total": "0.00"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "invalid purchase time format: 1:01 PM. want HH:MM format",
+			wantErrMsg: "purchaseTime: want HH:MM format.",
 		},
 		{
 			name: "invalid total format",
@@ -114,11 +129,16 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"retailer": "Target",
 				"purchaseDate": "2022-01-01",
 				"purchaseTime": "13:01",
-				"items": [],
+				"items": [
+					{
+					"shortDescription": "Mountain Dew 12PK",
+					"price": "6.49"
+					}
+				],
 				"total": "0"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "invalid total format: 0. want 0.00 format",
+			wantErrMsg: "total: want 0.00 format.",
 		},
 		{
 			name: "invalid item description",
@@ -133,7 +153,7 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"total": "1.25"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "invalid items: invalid short description format: Mountain Dew!!!. want alphanumeric characters, spaces, hyphens, and ampersands",
+			wantErrMsg: "items: (0: (shortDescription: want alphanumeric characters, spaces, hyphens, and ampersands.).).",
 		},
 		{
 			name: "invalid item price format",
@@ -148,7 +168,7 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"total": "1.20"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "invalid items: invalid price format: 1.2. want 0.00 format",
+			wantErrMsg: "items: (0: (price: want 0.00 format.).).",
 		},
 		{
 			name: "invalid items length",
@@ -160,7 +180,7 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"total": "0.00"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "invalid items: must contain at least one item",
+			wantErrMsg: "items: cannot be blank.",
 		},
 		{
 			name: "missing retailer",
@@ -174,7 +194,7 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"total": "1.25"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "retailer is not valid json",
+			wantErrMsg: "retailer: cannot be blank.",
 		},
 		{
 			name: "missing purchase date",
@@ -188,7 +208,7 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"total": "1.25"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "purchase date is not valid json",
+			wantErrMsg: "purchaseDate: cannot be blank.",
 		},
 		{
 			name: "missing purchase time",
@@ -202,7 +222,7 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"total": "1.25"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "purchase time is not valid json",
+			wantErrMsg: "purchaseTime: cannot be blank.",
 		},
 		{
 			name: "missing items",
@@ -213,7 +233,7 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"total": "1.25"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "invalid items: unexpected end of JSON input",
+			wantErrMsg: "items: cannot be blank.",
 		},
 		{
 			name: "missing total",
@@ -227,7 +247,7 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				}]
 			}`,
 			wantErr:    true,
-			wantErrMsg: "total is not valid json",
+			wantErrMsg: "total: cannot be blank.",
 		},
 		{
 			name: "missing item short description",
@@ -241,7 +261,7 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"total": "1.25"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "invalid items: item short description is not valid json",
+			wantErrMsg: "items: (0: (shortDescription: cannot be blank.).).",
 		},
 		{
 			name: "missing item price",
@@ -255,7 +275,7 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 				"total": "1.25"
 			}`,
 			wantErr:    true,
-			wantErrMsg: "invalid items: item price is not valid json",
+			wantErrMsg: "items: (0: (price: cannot be blank.).).",
 		},
 	}
 	for _, tc := range testCases {
@@ -264,39 +284,39 @@ func TestReceiptUnmarshalJSON(t *testing.T) {
 			err := json.Unmarshal([]byte(tc.json), &got)
 
 			if (err != nil) != tc.wantErr {
-				t.Errorf("%s: error = %v, wantErr %v", tc.name, err, tc.wantErr)
+				t.Errorf("error = %v, wantErr %v", err, tc.wantErr)
 				return
 			}
 
 			if tc.wantErr {
 				if err.Error() != tc.wantErrMsg {
-					t.Errorf("%s: error message = %v, expected %v", tc.name, err.Error(), tc.wantErrMsg)
+					t.Errorf("error message = %v, expected %v", err.Error(), tc.wantErrMsg)
 				}
 				return
 			}
 
 			if !tc.wantErr {
 				if got.Retailer != tc.want.Retailer {
-					t.Errorf("%s: Retailer = %v, expected %v", tc.name, got.Retailer, tc.want.Retailer)
+					t.Errorf("Retailer = %v, expected %v", got.Retailer, tc.want.Retailer)
 				}
 				if !got.PurchaseDate.Equal(tc.want.PurchaseDate) {
-					t.Errorf("%s: PurchaseDate = %v, expected %v", tc.name, got.PurchaseDate, tc.want.PurchaseDate)
+					t.Errorf("PurchaseDate = %v, expected %v", got.PurchaseDate, tc.want.PurchaseDate)
 				}
 				if !got.PurchaseTime.Equal(tc.want.PurchaseTime) {
-					t.Errorf("%s: PurchaseTime = %v, expected %v", tc.name, got.PurchaseTime, tc.want.PurchaseTime)
+					t.Errorf("PurchaseTime = %v, expected %v", got.PurchaseTime, tc.want.PurchaseTime)
 				}
 				if got.Total != tc.want.Total {
-					t.Errorf("%s: Total = %v, want %v", tc.name, got.Total, tc.want.Total)
+					t.Errorf("Total = %v, want %v", got.Total, tc.want.Total)
 				}
 				if len(got.Items) != len(tc.want.Items) {
-					t.Errorf("%s: Items length = %v, expected %v", tc.name, len(got.Items), len(tc.want.Items))
+					t.Errorf("Items length = %v, expected %v", len(got.Items), len(tc.want.Items))
 				}
 				for i := range got.Items {
 					if got.Items[i].ShortDescription != tc.want.Items[i].ShortDescription {
-						t.Errorf("%s: Item[%d] ShortDescription = %v, expected %v", tc.name, i, got.Items[i].ShortDescription, tc.want.Items[i].ShortDescription)
+						t.Errorf("Item[%d] ShortDescription = %v, expected %v", i, got.Items[i].ShortDescription, tc.want.Items[i].ShortDescription)
 					}
 					if got.Items[i].Price != tc.want.Items[i].Price {
-						t.Errorf("%s: Item[%d] Price = %v, expected %v", tc.name, i, got.Items[i].Price, tc.want.Items[i].Price)
+						t.Errorf("Item[%d] Price = %v, expected %v", i, got.Items[i].Price, tc.want.Items[i].Price)
 					}
 				}
 			}
